@@ -10,6 +10,8 @@ env:
   global:
     - DOCKER_IMAGE_NAME="hugo-app-travis"
     - K8S_DEPLOYMENT_NAME="hugo-app"
+    - K8S_SERVICE_NAME="hugo-app-svc"
+    - COMMIT=${TRAVIS_COMMIT::6}
 
 before_script:
 - docker pull smesch/hugo
@@ -22,13 +24,19 @@ script:
 - docker run -v ${TRAVIS_BUILD_DIR}/public:/public smesch/html-proofer htmlproofer /public --external_only --only-4xx
 
 after_script:
-- docker build -t ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:${TRAVIS_BUILD_ID} .
-- docker push ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:${TRAVIS_BUILD_ID}
-- docker tag ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:${TRAVIS_BUILD_ID} ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:latest
-- docker push ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:latest
+- export REPOSITORY=${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}
+- export TRAVIS_TAG=travis-${TRAVIS_BUILD_ID}
+- docker build -t ${REPOSITORY}:${TRAVIS_TAG} .
+- docker push ${REPOSITORY}:${TRAVIS_TAG}
+- docker tag ${REPOSITORY}:${TRAVIS_TAG} ${REPOSITORY}:${TRAVIS_BRANCH}
+- docker tag ${REPOSITORY}:${TRAVIS_TAG} ${REPOSITORY}:${COMMIT}
+- docker push ${REPOSITORY}
 - sed -i -e 's|KUBE_CA_CERT|'"${KUBE_CA_CERT}"'|g' kubeconfig
 - sed -i -e 's|KUBE_ENDPOINT|'"${KUBE_ENDPOINT}"'|g' kubeconfig
 - sed -i -e 's|KUBE_ADMIN_CERT|'"${KUBE_ADMIN_CERT}"'|g' kubeconfig
 - sed -i -e 's|KUBE_ADMIN_KEY|'"${KUBE_ADMIN_KEY}"'|g' kubeconfig
 - sed -i -e 's|KUBE_USERNAME|'"${KUBE_USERNAME}"'|g' kubeconfig
-- docker run -v ${TRAVIS_BUILD_DIR}:/kube smesch/kubectl kubectl --kubeconfig /kube/kubeconfig set image deployment/${K8S_DEPLOYMENT_NAME} ${K8S_DEPLOYMENT_NAME}=${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:$TRAVIS_BUILD_ID
+- export PROD_COLOR=`kubectl get svc ${K8S_SERVICE_NAME} --output=jsonpath={.spec.selector.color}`
+- export TARGET_COLOR=`if [ "$PROD_COLOR" == "blue"]; then echo "green"; else echo "blue"; fi`
+- docker run -v ${TRAVIS_BUILD_DIR}:/kube smesch/kubectl kubectl --kubeconfig /kube/kubeconfig set image deployments --selector=app=${K8S_DEPLOYMENT_NAME},color=${TARGET_COLOR} ${K8S_DEPLOYMENT_NAME}=${REPOSITORY}:${COMMIT}
+- docker run -v ${TRAVIS_BUILD_DIR}:/kube smesch/kubectl kubectl --kubeconfig /kube/kubeconfig label deployments --selector=app=${K8S_DEPLOYMENT_NAME},color=${TARGET_COLOR} --overwrite branch=${TRAVIS_BRANCH} commit=${COMMIT} travis=${TRAVIS_BUILD_ID}

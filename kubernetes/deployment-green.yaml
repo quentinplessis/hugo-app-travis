@@ -1,13 +1,14 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: hugo-app
+  name: hugo-app-green
 spec:
   replicas: 2
   template:
     metadata:
       labels:
         app: hugo-app
+        color: green
     spec:
       containers:
         - name: hugo-app
