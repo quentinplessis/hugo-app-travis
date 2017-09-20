@@ -11,7 +11,7 @@ env:
     - DOCKER_IMAGE_NAME="hugo-app-travis"
     - K8S_DEPLOYMENT_NAME="hugo-app"
     - K8S_SERVICE_NAME="hugo-app-svc"
-    - COMMIT=${TRAVIS_COMMIT::6}
+    - COMMIT=${TRAVIS_COMMIT::8}
 
 before_script:
 - docker pull smesch/hugo
